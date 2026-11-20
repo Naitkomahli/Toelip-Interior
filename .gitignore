@@ -3,10 +3,18 @@ Thumbs.db
 .DS_Store
 desktop.ini
 
+# Node
+node_modules/
+dist/
+.astro/
+
 # Deploy
 .vercel/
 
+# Environment
+.env
+.env.*
+!.env.example
+
 # Logs
 *.log
-
-.vercel
