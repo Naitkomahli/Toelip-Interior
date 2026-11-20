@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://toelipinterior.com/sitemap.xml
+Sitemap: https://toelip-interior.vercel.app/sitemap.xml
