@@ -1,7 +1,7 @@
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
-import { linkMessage, signInMessage, waitSeconds } from '../../lib/authFeedback';
+import { signInMessage, waitSeconds } from '../../lib/authFeedback';
 import { AdminShell } from './AdminShell';
 import { VIEW_TITLES, type AdminView } from './nav';
 import OverviewView from './OverviewView';
@@ -10,8 +10,8 @@ import AnalyticsView from './AnalyticsView';
 import ConnectionView from './ConnectionView';
 import AccountView from './AccountView';
 import { PasswordInput } from './PasswordInput';
-import { Button, Notice } from './ui';
-import { IconArrowLeft, IconMail } from './icons';
+import { Button } from './ui';
+import { IconArrowLeft } from './icons';
 
 export default function AdminApp({ view }: { view: AdminView }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -105,13 +105,9 @@ export default function AdminApp({ view }: { view: AdminView }) {
   );
 }
 
-type LoginMode = 'password' | 'link';
-
 function LoginScreen() {
-  const [mode, setMode] = useState<LoginMode>('password');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [sentTo, setSentTo] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -133,15 +129,7 @@ function LoginScreen() {
     return clean;
   }
 
-  function chooseMode(next: LoginMode) {
-    if (next === mode) return;
-    setMode(next);
-    setError('');
-    setSentTo('');
-    setPassword('');
-  }
-
-  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+  async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!supabase || busy || cooldown > 0) return;
     const clean = validEmail();
@@ -172,36 +160,6 @@ function LoginScreen() {
     }
   }
 
-  async function submitLink(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!supabase || busy || cooldown > 0) return;
-    const clean = validEmail();
-    if (!clean) return;
-
-    setBusy(true);
-    setError('');
-    try {
-      const { error: authError } = await supabase.auth.signInWithOtp({
-        email: clean,
-        options: {
-          emailRedirectTo: `${window.location.origin}/admin`,
-          shouldCreateUser: false,
-        },
-      });
-      if (authError) {
-        setError(linkMessage(authError));
-        const wait = waitSeconds(authError);
-        if (wait) setCooldown(wait);
-        return;
-      }
-      setSentTo(clean);
-    } catch {
-      setError('Tidak bisa menghubungi server. Periksa sambungan lalu coba lagi.');
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const locked = cooldown > 0;
 
   return (
@@ -219,141 +177,59 @@ function LoginScreen() {
         <h1>
           Masuk ke <em>meja kerja.</em>
         </h1>
-        <p className="page-lede">
-          Gunakan kata sandi akun studio. Tautan email tetap tersedia sebagai cadangan.
-        </p>
+        <p className="page-lede">Masuk dengan email dan kata sandi akun studio.</p>
 
-        {sentTo ? (
-          <div className="login-status">
-            <Notice tone="info" icon={<IconMail size={18} />}>
-              <p>
-                Tautan masuk sudah dikirim ke <strong>{sentTo}</strong>. Buka email tersebut, lalu
-                kembali ke halaman ini.
-              </p>
-            </Notice>
-            <Button
-              variant="ghost"
-              className="login-back"
-              onClick={() => {
-                setSentTo('');
-                setError('');
-              }}
-            >
-              Kirim ke alamat lain
-            </Button>
-          </div>
-        ) : (
-          <>
-            <div className="login-modes" role="group" aria-label="Cara masuk">
-              <button
-                type="button"
-                className="login-mode"
-                aria-pressed={mode === 'password'}
-                onClick={() => chooseMode('password')}
-              >
-                Kata sandi
-              </button>
-              <button
-                type="button"
-                className="login-mode"
-                aria-pressed={mode === 'link'}
-                onClick={() => chooseMode('link')}
-              >
-                Tautan email
-              </button>
+        <form className="login-form" onSubmit={submit} noValidate>
+          <div className="field">
+            <div className="field-label">
+              <label htmlFor="login-email">Email</label>
             </div>
+            <input
+              id="login-email"
+              type="email"
+              className="input"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                if (error) setError('');
+              }}
+              autoComplete="username"
+              inputMode="email"
+              placeholder="nama@studio.com"
+              aria-describedby={error ? errorId : undefined}
+            />
+          </div>
 
-            {mode === 'password' ? (
-              <form className="login-form" onSubmit={submitPassword} noValidate>
-                <div className="field">
-                  <div className="field-label">
-                    <label htmlFor="login-email">Email</label>
-                  </div>
-                  <input
-                    id="login-email"
-                    type="email"
-                    className="input"
-                    value={email}
-                    onChange={(event) => {
-                      setEmail(event.target.value);
-                      if (error) setError('');
-                    }}
-                    autoComplete="username"
-                    inputMode="email"
-                    placeholder="nama@studio.com"
-                    aria-describedby={error ? errorId : undefined}
-                  />
-                </div>
+          <div className="field">
+            <div className="field-label">
+              <label htmlFor={passwordId}>Kata sandi</label>
+            </div>
+            <PasswordInput
+              id={passwordId}
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                if (error) setError('');
+              }}
+              autoComplete="current-password"
+              aria-describedby={error ? errorId : undefined}
+            />
+          </div>
 
-                <div className="field">
-                  <div className="field-label">
-                    <label htmlFor={passwordId}>Kata sandi</label>
-                  </div>
-                  <PasswordInput
-                    id={passwordId}
-                    value={password}
-                    onChange={(event) => {
-                      setPassword(event.target.value);
-                      if (error) setError('');
-                    }}
-                    autoComplete="current-password"
-                    aria-describedby={error ? errorId : undefined}
-                  />
-                </div>
+          {error ? (
+            <p className="field-error login-error" id={errorId} role="alert">
+              {error}
+            </p>
+          ) : null}
 
-                {error ? (
-                  <p className="field-error login-error" id={errorId} role="alert">
-                    {error}
-                  </p>
-                ) : null}
+          <Button type="submit" variant="accent" loading={busy} disabled={locked}>
+            {locked ? `Coba lagi dalam ${cooldown} detik` : 'Masuk ke meja kerja'}
+          </Button>
 
-                <Button type="submit" variant="accent" loading={busy} disabled={locked}>
-                  {locked ? `Coba lagi dalam ${cooldown} detik` : 'Masuk ke meja kerja'}
-                </Button>
-
-                <p className="field-hint">
-                  Lupa kata sandi? Hubungi pengelola situs untuk mengatur ulang.
-                </p>
-              </form>
-            ) : (
-              <form className="login-form" onSubmit={submitLink} noValidate>
-                <div className="field">
-                  <div className="field-label">
-                    <label htmlFor="login-email">Email</label>
-                  </div>
-                  <input
-                    id="login-email"
-                    type="email"
-                    className="input"
-                    value={email}
-                    onChange={(event) => {
-                      setEmail(event.target.value);
-                      if (error) setError('');
-                    }}
-                    autoComplete="email"
-                    inputMode="email"
-                    placeholder="nama@studio.com"
-                    aria-describedby={error ? errorId : undefined}
-                  />
-                  {error ? (
-                    <p className="field-error login-error" id={errorId} role="alert">
-                      {error}
-                    </p>
-                  ) : null}
-                </div>
-
-                <Button type="submit" variant="accent" loading={busy} disabled={locked}>
-                  {locked ? `Coba lagi dalam ${cooldown} detik` : 'Kirim tautan masuk'}
-                </Button>
-
-                <p className="field-hint">
-                  Tautan memakai kuota email dan hanya berlaku sekali. Untuk masuk cepat, gunakan
-                  kata sandi.
-                </p>
-              </form>
-            )}
-          </>
-        )}
+          <p className="field-hint">
+            Lupa kata sandi? Hubungi pengelola situs untuk mengatur ulang.
+          </p>
+        </form>
 
         <a className="login-back" href="/">
           <IconArrowLeft size={15} /> Kembali ke situs

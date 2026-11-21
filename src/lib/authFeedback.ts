@@ -19,7 +19,7 @@ export function waitSeconds(error: AuthError): number | null {
 export function rateLimitMessage(error: AuthError): string {
   const wait = waitSeconds(error);
   if (wait) return `Terlalu banyak percobaan. Coba lagi dalam ${wait} detik.`;
-  return 'Batas kirim email sedang tercapai. Masuk dengan kata sandi, atau coba lagi nanti.';
+  return 'Batas percobaan sedang tercapai. Coba lagi nanti.';
 }
 
 export function signInMessage(error: AuthError): string {
@@ -34,18 +34,6 @@ export function signInMessage(error: AuthError): string {
   }
   if (isRateLimited(error)) return rateLimitMessage(error);
   return 'Masuk gagal. Periksa sambungan lalu coba lagi.';
-}
-
-export function linkMessage(error: AuthError): string {
-  if (isRateLimited(error)) return rateLimitMessage(error);
-  if (
-    error.code === 'otp_disabled' ||
-    error.code === 'signup_disabled' ||
-    /signups? not allowed/i.test(error.message)
-  ) {
-    return 'Email ini belum terdaftar sebagai pengguna. Minta pemilik membuat akun terlebih dahulu.';
-  }
-  return 'Tautan masuk gagal dikirim. Periksa email lalu coba lagi.';
 }
 
 export function passwordMessage(error: AuthError): string {
