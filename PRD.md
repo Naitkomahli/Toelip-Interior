@@ -51,7 +51,7 @@ Toelip Interior adalah studio jasa desain interior dan kontraktor furnitur kusto
 - **Tentang**: profil studio, nilai, proses kerja
 - **Layanan**: interior residensial, interior komersial, furnitur kustom
 - **Portofolio**: grid proyek + filter kategori, detail proyek (lightbox atau halaman sederhana)
-- **Kontak**: WhatsApp, Instagram, Carousell, alamat/area layanan, peta
+- **Kontak**: WhatsApp, Instagram, email, alamat/area layanan, peta
 
 ## 6. Kebutuhan Fungsional
 
@@ -64,7 +64,7 @@ Toelip Interior adalah studio jasa desain interior dan kontraktor furnitur kusto
 | F5 | Lightbox | Klik gambar untuk melihat ukuran besar | Sedang |
 | F6 | Proses kerja | Langkah: konsultasi, desain, produksi, pemasangan | Sedang |
 | F7 | Tombol WhatsApp | Link `wa.me` dengan pesan awal otomatis, floating button di mobile | Tinggi |
-| F8 | Tautan sosial | Instagram dan Carousell | Sedang |
+| F8 | Tautan sosial | Instagram dan email | Sedang |
 | F9 | Peta lokasi | Embed Google Maps atau tautan ke Maps | Rendah |
 | F10 | Footer | Kontak singkat, navigasi, hak cipta | Tinggi |
 
@@ -125,7 +125,7 @@ toelip-interior/
 - Foto proyek berkualitas baik (minimal 12 proyek, dikelompokkan per kategori)
 - Deskripsi singkat tiap proyek (lokasi, jenis, tahun)
 - Teks profil studio dan daftar layanan
-- Nomor WhatsApp, akun Instagram, tautan Carousell, alamat/area layanan
+- Nomor WhatsApp, akun Instagram, alamat email, alamat/area layanan
 - Testimoni klien (jika ada)
 
 ## 11. Rencana Pengerjaan
