@@ -140,16 +140,49 @@
   var lbIndex = document.getElementById('lb-index');
   var lbThumbs = document.getElementById('lb-thumbs');
   var lbStatus = document.getElementById('lb-status');
-  var lbItems = [];
+  var lbGalleries = new WeakMap();
+  var lbPhotos = [];
   var lbPos = 0;
+  var lbThumbItem = null;
   var lastFocused = null;
   var zoomed = false;
   var lastSwipeAt = 0;
 
   function visiblePortfolioItems(){
-    return Array.prototype.slice.call(document.querySelectorAll('.portfolio-item')).filter(function(it){
+    return portfolioItems().filter(function(it){
       return it.style.display !== 'none';
     });
+  }
+
+  function titleOf(item){
+    var title = item.querySelector('.caption strong');
+    return title ? title.textContent.trim() : '';
+  }
+
+  function photosFor(item){
+    var stored = lbGalleries.get(item);
+    if (stored && stored.length) return stored;
+    var img = item.querySelector('img');
+    if (!img) return [];
+    return [{ src: img.getAttribute('src'), alt: img.alt || titleOf(item) }];
+  }
+
+  function collectPhotos(){
+    var list = [];
+    visiblePortfolioItems().forEach(function(item){
+      var photos = photosFor(item);
+      photos.forEach(function(photo, index){
+        list.push({ item: item, photo: photo, index: index, total: photos.length });
+      });
+    });
+    return list;
+  }
+
+  function photoIndexFor(item, index){
+    for (var i = 0; i < lbPhotos.length; i++) {
+      if (lbPhotos[i].item === item && lbPhotos[i].index === index) return i;
+    }
+    return -1;
   }
 
   function resetZoom(){
@@ -161,51 +194,70 @@
 
   function buildThumbs(){
     if (!lbThumbs) return;
+    var entry = lbPhotos[lbPos];
+    lbThumbItem = entry ? entry.item : null;
     lbThumbs.innerHTML = '';
-    lbItems.forEach(function(item, i){
-      var source = item.querySelector('img');
+    if (!entry) return;
+    var photos = photosFor(entry.item);
+    var title = titleOf(entry.item);
+    photos.forEach(function(photo, i){
       var thumb = document.createElement('button');
       thumb.type = 'button';
       thumb.className = 'lb-thumb';
-      thumb.setAttribute('aria-label', 'Lihat karya ' + (i + 1));
-      thumb.setAttribute('aria-current', i === lbPos ? 'true' : 'false');
+      thumb.setAttribute('aria-label', 'Foto ' + (i + 1) + ' dari ' + photos.length + (title ? ': ' + title : ''));
+      thumb.setAttribute('aria-current', i === entry.index ? 'true' : 'false');
       var image = document.createElement('img');
-      image.src = source ? source.getAttribute('src') : '';
+      image.src = photo.src;
       image.alt = '';
       image.width = 54;
       image.height = 40;
       image.loading = 'lazy';
       thumb.appendChild(image);
       thumb.addEventListener('click', function(){
-        lbPos = i;
+        var next = photoIndexFor(entry.item, i);
+        if (next < 0) return;
+        lbPos = next;
         renderLightbox();
       });
       lbThumbs.appendChild(thumb);
     });
+    lbThumbs.style.display = photos.length < 2 ? 'none' : '';
   }
 
   function renderLightbox(){
-    var item = lbItems[lbPos];
-    if (!item) return;
+    var entry = lbPhotos[lbPos];
+    if (!entry) return;
     resetZoom();
-    var img = item.querySelector('img');
-    var title = item.querySelector('.caption strong');
-    if (img && lbImg) {
-      lbImg.src = img.getAttribute('src');
-      lbImg.alt = img.alt;
+    var title = titleOf(entry.item);
+    if (lbImg) {
+      lbImg.src = entry.photo.src;
+      lbImg.alt = entry.photo.alt || title;
     }
-    if (lbCap) lbCap.textContent = title ? title.textContent : '';
-    if (lbIndex) lbIndex.textContent = (lbPos + 1) + ' / ' + lbItems.length;
+    if (lbCap) lbCap.textContent = title;
+
+    var items = visiblePortfolioItems();
+    var workIndex = items.indexOf(entry.item) + 1;
+    if (lbIndex) {
+      var label = 'Karya ' + workIndex + ' / ' + items.length;
+      if (entry.total > 1) label += ' \u00b7 Foto ' + (entry.index + 1) + ' / ' + entry.total;
+      lbIndex.textContent = label;
+    }
     if (lbStatus) {
-      lbStatus.textContent = 'Karya ' + (lbPos + 1) + ' dari ' + lbItems.length +
-        (title && title.textContent ? ': ' + title.textContent.trim() : '');
+      lbStatus.textContent = 'Karya ' + workIndex + ' dari ' + items.length +
+        (title ? ': ' + title : '') +
+        (entry.total > 1 ? '. Foto ' + (entry.index + 1) + ' dari ' + entry.total : '');
     }
+
     if (lbThumbs) {
-      var thumbs = lbThumbs.querySelectorAll('.lb-thumb');
-      for (var i = 0; i < thumbs.length; i++) {
-        thumbs[i].setAttribute('aria-current', i === lbPos ? 'true' : 'false');
+      if (lbThumbItem !== entry.item) {
+        buildThumbs();
+      } else {
+        var thumbs = lbThumbs.querySelectorAll('.lb-thumb');
+        for (var i = 0; i < thumbs.length; i++) {
+          thumbs[i].setAttribute('aria-current', i === entry.index ? 'true' : 'false');
+        }
       }
-      var activeThumb = thumbs[lbPos];
+      var activeThumb = lbThumbs.children[entry.index];
       if (activeThumb && lbThumbs.scrollTo) {
         var target = activeThumb.offsetLeft - (lbThumbs.clientWidth - activeThumb.offsetWidth) / 2;
         lbThumbs.scrollTo({ left: Math.max(0, target), behavior: reduced ? 'auto' : 'smooth' });
@@ -214,17 +266,19 @@
         activeThumb.focus();
       }
     }
-    var single = lbItems.length < 2;
+
+    var single = lbPhotos.length < 2;
     if (lbPrev) lbPrev.disabled = single;
     if (lbNext) lbNext.disabled = single;
   }
 
   function openLightbox(item){
     if (!lightbox) return;
-    lbItems = visiblePortfolioItems();
-    lbPos = lbItems.indexOf(item);
+    lbPhotos = collectPhotos();
+    lbPos = photoIndexFor(item, 0);
     if (lbPos < 0) lbPos = 0;
     lastFocused = item.querySelector('.p-media') || document.activeElement;
+    lbThumbItem = null;
     buildThumbs();
     renderLightbox();
     lightbox.classList.add('open');
@@ -245,8 +299,8 @@
   }
 
   function stepLightbox(dir){
-    if (lbItems.length < 2) return;
-    lbPos = (lbPos + dir + lbItems.length) % lbItems.length;
+    if (lbPhotos.length < 2) return;
+    lbPos = (lbPos + dir + lbPhotos.length) % lbPhotos.length;
     renderLightbox();
   }
 
@@ -391,6 +445,12 @@
         var article = document.createElement('article');
         article.className = 'portfolio-item ' + layoutPattern[index % layoutPattern.length] + ' reveal';
         article.setAttribute('data-category', project.category);
+
+        var photos = [project.cover];
+        if (Array.isArray(project.gallery)) photos = photos.concat(project.gallery);
+        lbGalleries.set(article, photos.map(function(photo){
+          return { src: photo.src, alt: photo.alt || project.title };
+        }));
 
         var button = document.createElement('button');
         button.type = 'button';

@@ -20,7 +20,20 @@ interface Row {
   title?: unknown;
   category?: unknown;
   cover?: Cover | null;
+  gallery?: unknown;
   sort_order?: unknown;
+}
+
+function photo(value: unknown, fallbackAlt: string) {
+  if (!value || typeof value !== 'object') return null;
+  const entry = value as Cover;
+  if (typeof entry.src !== 'string' || !entry.src) return null;
+  return {
+    src: entry.src,
+    width: typeof entry.width === 'number' ? entry.width : 0,
+    height: typeof entry.height === 'number' ? entry.height : 0,
+    alt: typeof entry.alt === 'string' && entry.alt ? entry.alt : fallbackAlt,
+  };
 }
 
 function json(body: unknown, status: number, cacheControl: string) {
@@ -55,7 +68,7 @@ export const GET: APIRoute = async () => {
 
   const endpoint =
     `${baseUrl(rawUrl)}/rest/v1/projects` +
-    '?select=id,title,category,cover,sort_order' +
+    '?select=id,title,category,cover,gallery,sort_order' +
     '&status=eq.published' +
     '&order=sort_order.asc,title.asc';
 
@@ -70,13 +83,17 @@ export const GET: APIRoute = async () => {
 
     const rows = (await response.json()) as Row[];
     const projects = rows.flatMap((row) => {
-      const cover = row.cover;
       const title = typeof row.title === 'string' ? row.title : '';
       const category = typeof row.category === 'string' ? row.category : '';
+      const cover = photo(row.cover, title);
 
-      if (!cover || typeof cover.src !== 'string' || !cover.src || !title || !category) {
+      if (!cover || !title || !category) {
         return [];
       }
+
+      const gallery = Array.isArray(row.gallery)
+        ? row.gallery.flatMap((entry) => photo(entry, title) ?? [])
+        : [];
 
       return [
         {
@@ -84,12 +101,8 @@ export const GET: APIRoute = async () => {
           title,
           category,
           categoryLabel: CATEGORY_LABELS[category] ?? category,
-          cover: {
-            src: cover.src,
-            width: typeof cover.width === 'number' ? cover.width : 0,
-            height: typeof cover.height === 'number' ? cover.height : 0,
-            alt: typeof cover.alt === 'string' ? cover.alt : title,
-          },
+          cover,
+          gallery,
         },
       ];
     });
