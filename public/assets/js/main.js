@@ -50,15 +50,22 @@
 
   /* ---------- Portfolio filter + lightbox ---------- */
   var filters = document.querySelectorAll('.filter button');
-  var items = document.querySelectorAll('.portfolio-item');
+  var portfolioGrid = document.getElementById('portfolio-grid');
+  var portfolioEmpty = document.getElementById('gallery-empty');
   var projectCount = document.getElementById('project-count');
+  var activeFilter = 'all';
+
+  function portfolioItems(){
+    return Array.prototype.slice.call(document.querySelectorAll('.portfolio-item'));
+  }
 
   function applyFilter(cat, btn){
+    activeFilter = cat;
     filters.forEach(function(b){ b.classList.remove('active'); b.setAttribute('aria-pressed', 'false'); });
     btn.classList.add('active');
     btn.setAttribute('aria-pressed', 'true');
 
-    var list = Array.prototype.slice.call(items);
+    var list = portfolioItems();
     var first = new Map();
     if (!reduced) {
       list.forEach(function(it){
@@ -84,6 +91,13 @@
           { duration: 340, easing: 'cubic-bezier(.16,1,.3,1)' }
         );
       }
+    }
+
+    if (portfolioEmpty) {
+      portfolioEmpty.textContent = list.length
+        ? 'Belum ada karya di kategori ini.'
+        : 'Belum ada karya yang dipublikasikan.';
+      portfolioEmpty.hidden = visible > 0;
     }
 
     if (reduced || !first.size) return;
@@ -236,16 +250,19 @@
     renderLightbox();
   }
 
-  document.querySelectorAll('.portfolio-item').forEach(function(item){
+  portfolioItems().forEach(function(item){
     var trigger = item.querySelector('.p-media');
-    if (trigger) {
-      if (!trigger.hasAttribute('aria-haspopup')) trigger.setAttribute('aria-haspopup', 'dialog');
-      trigger.addEventListener('click', function(){ openLightbox(item); });
-    } else {
-      var img = item.querySelector('img');
-      if (img) img.addEventListener('click', function(){ openLightbox(item); });
-    }
+    if (trigger && !trigger.hasAttribute('aria-haspopup')) trigger.setAttribute('aria-haspopup', 'dialog');
   });
+
+  if (portfolioGrid) {
+    portfolioGrid.addEventListener('click', function(e){
+      var trigger = e.target && e.target.closest ? e.target.closest('.p-media') : null;
+      if (!trigger || !portfolioGrid.contains(trigger)) return;
+      var item = trigger.closest('.portfolio-item');
+      if (item) openLightbox(item);
+    });
+  }
 
   if (lbClose) lbClose.addEventListener('click', closeLightbox);
   if (lbPrev) lbPrev.addEventListener('click', function(){ stepLightbox(-1); });
@@ -306,6 +323,128 @@
         }
       }
     });
+  }
+
+  /* ---------- Live portfolio from the admin database ---------- */
+  function revealNewItems(list){
+    var els = Array.prototype.slice.call(list);
+    if (reduced || !('IntersectionObserver' in window)) {
+      els.forEach(function(el){ el.classList.add('visible'); });
+      return;
+    }
+    var observer = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -8% 0px' });
+    els.forEach(function(el){ observer.observe(el); });
+  }
+
+  function refreshPortfolio(){
+    var active = null;
+    filters.forEach(function(b){ if (b.dataset.filter === activeFilter) active = b; });
+    if (!active && filters.length) active = filters[0];
+    if (active) applyFilter(active.dataset.filter, active);
+    else if (projectCount) projectCount.textContent = String(portfolioItems().length);
+  }
+
+  document.addEventListener('toelip:portfolio', refreshPortfolio);
+
+  if (portfolioGrid && portfolioGrid.getAttribute('data-live-projects')) {
+    var layoutPattern = ['wide', 'narrow', 'third', 'third', 'third', 'wide', 'narrow', 'third', 'third', 'third', 'wide', 'narrow'];
+    var ratios = [
+      { name: '34', value: 3 / 4 },
+      { name: '45', value: 4 / 5 },
+      { name: '11', value: 1 },
+      { name: '43', value: 4 / 3 }
+    ];
+
+    /* Keep each crop close to the photo's own shape so uploads are not cut hard. */
+    var ratioFor = function(cover){
+      var w = Number(cover && cover.width) || 0;
+      var h = Number(cover && cover.height) || 0;
+      if (!w || !h) return '43';
+      var shape = Math.log(w / h);
+      var best = ratios[0];
+      var bestGap = Infinity;
+      ratios.forEach(function(ratio){
+        var gap = Math.abs(shape - Math.log(ratio.value));
+        if (gap < bestGap) { bestGap = gap; best = ratio; }
+      });
+      return best.name;
+    };
+
+    var renderLiveProjects = function(list){
+      if (!list.length) {
+        portfolioGrid.innerHTML = '';
+        if (portfolioEmpty) portfolioEmpty.hidden = false;
+        if (projectCount) projectCount.textContent = '0';
+        return;
+      }
+
+      var fragment = document.createDocumentFragment();
+
+      list.forEach(function(project, index){
+        var article = document.createElement('article');
+        article.className = 'portfolio-item ' + layoutPattern[index % layoutPattern.length] + ' reveal';
+        article.setAttribute('data-category', project.category);
+
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'p-media ratio-' + ratioFor(project.cover);
+        button.setAttribute('aria-label', 'Perbesar karya: ' + project.title);
+        button.setAttribute('aria-haspopup', 'dialog');
+
+        var image = document.createElement('img');
+        image.src = project.cover.src;
+        image.alt = project.cover.alt || project.title;
+        if (project.cover.width) image.width = project.cover.width;
+        if (project.cover.height) image.height = project.cover.height;
+        image.loading = index < 2 ? 'eager' : 'lazy';
+        image.decoding = 'async';
+
+        var zoom = document.createElement('span');
+        zoom.className = 'p-zoom';
+        zoom.setAttribute('aria-hidden', 'true');
+        zoom.textContent = '+';
+
+        button.appendChild(image);
+        button.appendChild(zoom);
+
+        var caption = document.createElement('div');
+        caption.className = 'caption';
+        var title = document.createElement('strong');
+        title.textContent = project.title;
+        var category = document.createElement('span');
+        category.textContent = project.categoryLabel || project.category;
+        caption.appendChild(title);
+        caption.appendChild(category);
+
+        article.appendChild(button);
+        article.appendChild(caption);
+        fragment.appendChild(article);
+      });
+
+      portfolioGrid.innerHTML = '';
+      portfolioGrid.appendChild(fragment);
+      if (portfolioEmpty) portfolioEmpty.hidden = true;
+      revealNewItems(portfolioGrid.querySelectorAll('.portfolio-item'));
+      document.dispatchEvent(new CustomEvent('toelip:portfolio'));
+    };
+
+    fetch(portfolioGrid.getAttribute('data-live-projects'), { headers: { Accept: 'application/json' } })
+      .then(function(response){
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function(data){
+        if (!data || data.configured !== true || !Array.isArray(data.projects)) return;
+        renderLiveProjects(data.projects);
+      })
+      .catch(function(){ /* keep the static fallback */ });
   }
 
   /* ---------- Contact brief composer ---------- */
