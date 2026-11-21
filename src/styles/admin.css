@@ -1963,20 +1963,6 @@ img {
   text-align: center;
 }
 
-.login-status {
-  margin-top: 16px;
-}
-
-.login-status p {
-  color: var(--muted);
-  font-size: 11.5px;
-  line-height: 1.55;
-}
-
-.login-status strong {
-  color: var(--ink);
-}
-
 .password-field {
   position: relative;
 }
