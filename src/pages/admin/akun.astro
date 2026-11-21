@@ -1,0 +1,9 @@
+---
+import AdminLayout from '../../layouts/AdminLayout.astro';
+import AdminApp from '../../components/admin/AdminApp';
+
+export const prerender = true;
+---
+<AdminLayout title="Akun">
+  <AdminApp client:load view="account" />
+</AdminLayout>

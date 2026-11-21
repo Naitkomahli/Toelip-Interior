@@ -1,12 +1,15 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useEffect, useId, useState, type FormEvent } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '../../lib/supabase';
+import { linkMessage, signInMessage, waitSeconds } from '../../lib/authFeedback';
 import { AdminShell } from './AdminShell';
 import { VIEW_TITLES, type AdminView } from './nav';
 import OverviewView from './OverviewView';
 import PortfolioView from './PortfolioView';
 import AnalyticsView from './AnalyticsView';
 import ConnectionView from './ConnectionView';
+import AccountView from './AccountView';
+import { PasswordInput } from './PasswordInput';
 import { Button, Notice } from './ui';
 import { IconArrowLeft, IconMail } from './icons';
 
@@ -79,6 +82,8 @@ export default function AdminApp({ view }: { view: AdminView }) {
         return <AnalyticsView />;
       case 'connection':
         return <ConnectionView session={session} />;
+      case 'account':
+        return <AccountView session={session} />;
       default:
         return <OverviewView />;
     }
@@ -100,44 +105,104 @@ export default function AdminApp({ view }: { view: AdminView }) {
   );
 }
 
-function LoginScreen() {
-  const [email, setEmail] = useState('');
-  const [status, setStatus] = useState<'idle' | 'sending' | 'sent' | 'error'>('idle');
-  const [message, setMessage] = useState('');
+type LoginMode = 'password' | 'link';
 
-  async function submit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!supabase) return;
+function LoginScreen() {
+  const [mode, setMode] = useState<LoginMode>('password');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [sentTo, setSentTo] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const passwordId = useId();
+  const errorId = useId();
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const timer = window.setTimeout(() => setCooldown((value) => value - 1), 1000);
+    return () => window.clearTimeout(timer);
+  }, [cooldown]);
+
+  function validEmail(): string | null {
     const clean = email.trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean)) {
-      setStatus('error');
-      setMessage('Masukkan alamat email yang valid.');
-      return;
+      setError('Masukkan alamat email yang valid.');
+      return null;
     }
-
-    setStatus('sending');
-    setMessage('');
-    const { error } = await supabase.auth.signInWithOtp({
-      email: clean,
-      options: {
-        emailRedirectTo: `${window.location.origin}/admin`,
-        shouldCreateUser: false,
-      },
-    });
-
-    if (error) {
-      setStatus('error');
-      setMessage(
-        error.message.toLowerCase().includes('rate')
-          ? 'Terlalu banyak percobaan. Tunggu satu menit lalu coba lagi.'
-          : 'Tautan masuk gagal dikirim. Periksa email dan konfigurasi Supabase.'
-      );
-      return;
-    }
-
-    setStatus('sent');
-    setMessage(clean);
+    return clean;
   }
+
+  function chooseMode(next: LoginMode) {
+    if (next === mode) return;
+    setMode(next);
+    setError('');
+    setSentTo('');
+    setPassword('');
+  }
+
+  async function submitPassword(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || busy || cooldown > 0) return;
+    const clean = validEmail();
+    if (!clean) return;
+    if (!password) {
+      setError('Masukkan kata sandi akun Anda.');
+      return;
+    }
+
+    setBusy(true);
+    setError('');
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: clean,
+        password,
+      });
+      if (authError) {
+        setError(signInMessage(authError));
+        const wait = waitSeconds(authError);
+        if (wait) setCooldown(wait);
+        return;
+      }
+      setPassword('');
+    } catch {
+      setError('Tidak bisa menghubungi server. Periksa sambungan lalu coba lagi.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function submitLink(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!supabase || busy || cooldown > 0) return;
+    const clean = validEmail();
+    if (!clean) return;
+
+    setBusy(true);
+    setError('');
+    try {
+      const { error: authError } = await supabase.auth.signInWithOtp({
+        email: clean,
+        options: {
+          emailRedirectTo: `${window.location.origin}/admin`,
+          shouldCreateUser: false,
+        },
+      });
+      if (authError) {
+        setError(linkMessage(authError));
+        const wait = waitSeconds(authError);
+        if (wait) setCooldown(wait);
+        return;
+      }
+      setSentTo(clean);
+    } catch {
+      setError('Tidak bisa menghubungi server. Periksa sambungan lalu coba lagi.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const locked = cooldown > 0;
 
   return (
     <div className="login-page">
@@ -155,57 +220,139 @@ function LoginScreen() {
           Masuk ke <em>meja kerja.</em>
         </h1>
         <p className="page-lede">
-          Tautan masuk dikirim ke email pemilik. Tidak ada kata sandi yang perlu diingat.
+          Gunakan kata sandi akun studio. Tautan email tetap tersedia sebagai cadangan.
         </p>
 
-        {status === 'sent' ? (
+        {sentTo ? (
           <div className="login-status">
             <Notice tone="info" icon={<IconMail size={18} />}>
               <p>
-                Tautan masuk sudah dikirim ke <strong>{message}</strong>. Buka email tersebut,
-                lalu kembali ke halaman ini.
+                Tautan masuk sudah dikirim ke <strong>{sentTo}</strong>. Buka email tersebut, lalu
+                kembali ke halaman ini.
               </p>
             </Notice>
             <Button
               variant="ghost"
               className="login-back"
               onClick={() => {
-                setStatus('idle');
-                setMessage('');
+                setSentTo('');
+                setError('');
               }}
             >
               Kirim ke alamat lain
             </Button>
           </div>
         ) : (
-          <form className="login-form" onSubmit={submit} noValidate>
-            <div className="field">
-              <div className="field-label">
-                <label htmlFor="login-email">Email pemilik</label>
-              </div>
-              <input
-                id="login-email"
-                type="email"
-                className="input"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                autoComplete="email"
-                inputMode="email"
-                placeholder="nama@studio.com"
-                aria-invalid={status === 'error' || undefined}
-                aria-describedby={status === 'error' ? 'login-error' : undefined}
-                data-autofocus
-              />
-              {status === 'error' ? (
-                <p className="field-error" id="login-error" role="alert">
-                  {message}
-                </p>
-              ) : null}
+          <>
+            <div className="login-modes" role="group" aria-label="Cara masuk">
+              <button
+                type="button"
+                className="login-mode"
+                aria-pressed={mode === 'password'}
+                onClick={() => chooseMode('password')}
+              >
+                Kata sandi
+              </button>
+              <button
+                type="button"
+                className="login-mode"
+                aria-pressed={mode === 'link'}
+                onClick={() => chooseMode('link')}
+              >
+                Tautan email
+              </button>
             </div>
-            <Button type="submit" variant="accent" loading={status === 'sending'}>
-              Kirim tautan masuk
-            </Button>
-          </form>
+
+            {mode === 'password' ? (
+              <form className="login-form" onSubmit={submitPassword} noValidate>
+                <div className="field">
+                  <div className="field-label">
+                    <label htmlFor="login-email">Email</label>
+                  </div>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className="input"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      if (error) setError('');
+                    }}
+                    autoComplete="username"
+                    inputMode="email"
+                    placeholder="nama@studio.com"
+                    aria-describedby={error ? errorId : undefined}
+                  />
+                </div>
+
+                <div className="field">
+                  <div className="field-label">
+                    <label htmlFor={passwordId}>Kata sandi</label>
+                  </div>
+                  <PasswordInput
+                    id={passwordId}
+                    value={password}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                      if (error) setError('');
+                    }}
+                    autoComplete="current-password"
+                    aria-describedby={error ? errorId : undefined}
+                  />
+                </div>
+
+                {error ? (
+                  <p className="field-error login-error" id={errorId} role="alert">
+                    {error}
+                  </p>
+                ) : null}
+
+                <Button type="submit" variant="accent" loading={busy} disabled={locked}>
+                  {locked ? `Coba lagi dalam ${cooldown} detik` : 'Masuk ke meja kerja'}
+                </Button>
+
+                <p className="field-hint">
+                  Lupa kata sandi? Hubungi pengelola situs untuk mengatur ulang.
+                </p>
+              </form>
+            ) : (
+              <form className="login-form" onSubmit={submitLink} noValidate>
+                <div className="field">
+                  <div className="field-label">
+                    <label htmlFor="login-email">Email</label>
+                  </div>
+                  <input
+                    id="login-email"
+                    type="email"
+                    className="input"
+                    value={email}
+                    onChange={(event) => {
+                      setEmail(event.target.value);
+                      if (error) setError('');
+                    }}
+                    autoComplete="email"
+                    inputMode="email"
+                    placeholder="nama@studio.com"
+                    aria-describedby={error ? errorId : undefined}
+                  />
+                  {error ? (
+                    <p className="field-error login-error" id={errorId} role="alert">
+                      {error}
+                    </p>
+                  ) : null}
+                </div>
+
+                <Button type="submit" variant="accent" loading={busy} disabled={locked}>
+                  {locked ? `Coba lagi dalam ${cooldown} detik` : 'Kirim tautan masuk'}
+                </Button>
+
+                <p className="field-hint">
+                  Tautan memakai kuota email dan hanya berlaku sekali. Untuk masuk cepat, gunakan
+                  kata sandi.
+                </p>
+              </form>
+            )}
+          </>
         )}
 
         <a className="login-back" href="/">
@@ -214,7 +361,7 @@ function LoginScreen() {
       </main>
 
       <p className="login-note">
-        Akses hanya untuk pemilik Toelip Interior. Sesi berakhir sendiri saat keluar.
+        Akses hanya untuk pemilik dan staf Toelip Interior. Sesi berakhir saat keluar.
       </p>
     </div>
   );

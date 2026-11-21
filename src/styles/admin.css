@@ -1977,6 +1977,125 @@ img {
   color: var(--ink);
 }
 
+.login-modes {
+  display: flex;
+  gap: 4px;
+  margin-top: 22px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--paper-deep);
+}
+
+.login-mode {
+  flex: 1;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 11.5px;
+  font-weight: 600;
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.login-mode:hover {
+  color: var(--ink);
+}
+
+.login-mode[aria-pressed='true'] {
+  background: var(--ink);
+  color: var(--cream);
+}
+
+.login-modes + .login-form {
+  margin-top: 16px;
+}
+
+.password-field {
+  position: relative;
+}
+
+.password-field .input {
+  padding-right: 50px;
+}
+
+.password-toggle {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 6px;
+  color: var(--muted);
+  transition: background-color 140ms ease, color 140ms ease;
+}
+
+.password-toggle:hover {
+  background: var(--paper-deep);
+  color: var(--ink);
+}
+
+.password-toggle:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.login-error {
+  margin-top: -6px;
+}
+
+/* ---------- Account ---------- */
+
+.account-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 26px;
+  align-items: start;
+}
+
+.account-identity {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.account-mark {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  background: var(--paper-deep);
+  color: var(--accent);
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.account-email {
+  font-size: 13px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.account-meta {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.account-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-width: 440px;
+}
+
 /* ---------- Analytics ---------- */
 
 .period-bar {
